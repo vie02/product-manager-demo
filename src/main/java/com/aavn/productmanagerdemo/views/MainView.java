@@ -1,8 +1,11 @@
 package com.aavn.productmanagerdemo.views;
 
 import com.aavn.productmanagerdemo.model.Product;
+import com.vaadin.flow.component.AttachEvent;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.grid.Grid;
+import com.vaadin.flow.component.html.Span;
 import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
@@ -15,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDate;
 
-@Push
+@Push // Asynchronous updates
 @Route
 public class MainView extends VerticalLayout {
 
@@ -24,6 +27,52 @@ public class MainView extends VerticalLayout {
     final Grid<Product> grid;
     final ProductDialog dialog;
     final ProductDataProvider dataProvider;
+
+    private FeederThread thread;
+
+    @Override
+    protected void onAttach(AttachEvent attachEvent) {
+        super.onAttach(attachEvent);
+
+        addComponentAsFirst(new Span("Waiting for updates"));
+
+        // Start the data feed thread
+        thread = new FeederThread(attachEvent.getUI(), this);
+        thread.start();
+    }
+
+    private static class FeederThread extends Thread {
+        private final UI ui;
+        private final MainView view;
+
+        private int count = 0;
+
+        public FeederThread(UI ui, MainView view) {
+            this.ui = ui;
+            this.view = view;
+        }
+
+        @Override
+        public void run() {
+            try {
+                // Update the data for a while
+                while (count < 10) {
+                    // Sleep to emulate background work
+                    Thread.sleep(500);
+                    String message = "This is update " + count++;
+
+                    ui.access(() -> view.addComponentAsFirst(new Span(message)));
+                }
+
+                // Inform that we are done
+                ui.access(() -> {
+                    view.addComponentAsFirst(new Span("Done updating"));
+                });
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
     @Autowired
     public MainView(ProductDataProvider dataProvider, ProductDialog dialog) {
